@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="none">
+  <rect width="1200" height="480" fill="#07090f"/>
+  <g stroke="#3ee0ff" stroke-opacity="0.35" stroke-width="1.4">
+    <path d="M80 300C220 120 360 360 560 190s340-80 560 40"/>
+    <path d="M40 180C240 40 420 300 640 150s360 90 500-20"/>
+  </g>
+  <circle cx="220" cy="170" r="7" fill="#3ee0ff"/>
+  <circle cx="560" cy="190" r="9" fill="#8d7cff"/>
+  <circle cx="900" cy="160" r="6" fill="#e7edf4"/>
+  <text x="72" y="420" fill="#e7edf4" font-family="ui-sans-serif, system-ui" font-size="42">NEURALPAD</text>
+</svg>
