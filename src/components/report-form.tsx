@@ -2,31 +2,28 @@
 
 import { useState } from "react";
 
-export function ReportForm({ id, count }: { id: string; count: number }) {
-  const [note, setNote] = useState("");
-  async function submit(formData: FormData) {
-    const response = await fetch(`/api/index/${id}/report`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: formData.get("reason"), details: formData.get("details") }),
-    });
-    const data = await response.json();
-    setNote(response.ok ? "Report stored. The record stays visible until a reviewer checks it." : data.error || "Report failed");
-  }
+export function ReportForm({ mint }: { mint: string }) {
+  const [reason, setReason] = useState("impersonation");
+  const [detail, setDetail] = useState("");
+  const [status, setStatus] = useState("");
   return (
-    <form className="panel grid max-w-xl gap-2 p-4" action={(formData) => void submit(formData)}>
-      <h2 className="font-display text-xl">Report this record</h2>
-      <p className="text-xs text-paper-faint">{count} report{count === 1 ? "" : "s"} on file.</p>
-      <select className="select" name="reason" defaultValue="incorrect">
-        <option value="incorrect">Incorrect</option>
-        <option value="duplicate">Duplicate</option>
-        <option value="private-data">Private data</option>
-        <option value="spam">Spam</option>
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      const response = await fetch("/api/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mint, reason, detail }) });
+      const data = await response.json();
+      setStatus(response.ok ? "Report received." : data.error || "Report failed");
+    }}>
+      <h3>Report this coin</h3>
+      <select className="select" value={reason} onChange={(event) => setReason(event.target.value)} aria-label="Report reason">
+        <option value="impersonation">Impersonation</option>
+        <option value="hate">Hate</option>
+        <option value="sexual">Sexual content</option>
+        <option value="scam">Scam</option>
         <option value="other">Other</option>
       </select>
-      <textarea className="area" name="details" required minLength={8} placeholder="What is wrong? Do not include private data." />
-      <button className="btn btn-ghost w-fit" type="submit">Submit report</button>
-      {note ? <p className="text-sm text-paper-dim">{note}</p> : null}
+      <textarea className="area" value={detail} onChange={(event) => setDetail(event.target.value)} placeholder="What is wrong?" aria-label="Report detail" />
+      <button className="btn" type="submit">Submit report</button>
+      <p role="status">{status}</p>
     </form>
   );
 }

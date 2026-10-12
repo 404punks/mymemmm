@@ -1,3 +1,3 @@
 export default function Loading() {
-  return <div className="skeleton h-64" aria-label="Loading" />;
+  return <div className="page"><div className="skeleton" style={{ height: 180 }} aria-label="Loading" /></div>;
 }

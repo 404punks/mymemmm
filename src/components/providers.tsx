@@ -3,49 +3,39 @@
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
+import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { publicEnv, rpcFor, type Cluster } from "@/lib/client-env";
 
-type NetworkContextValue = {
-  network: Cluster;
-  setNetwork: (network: Cluster) => void;
-  mainnetLocked: boolean;
-};
-
-const NetworkContext = createContext<NetworkContextValue>({
-  network: "devnet",
-  setNetwork: () => undefined,
-  mainnetLocked: true,
-});
-
-export function useNetwork() {
-  return useContext(NetworkContext);
-}
+type Theme = "dark" | "light";
+const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({ theme: "dark", toggle: () => undefined });
+export function useTheme() { return useContext(ThemeContext); }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [network, setNetworkState] = useState<Cluster>(publicEnv.defaultNetwork);
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
-  const endpoint = rpcFor(network) || publicEnv.rpcDevnet;
+  const [theme, setTheme] = useState<Theme>("dark");
+  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter(), new BackpackWalletAdapter()], []);
+  const endpoint = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/rpc`;
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("np-network");
-    if (stored === "devnet") setNetworkState("devnet");
-    if (stored === "mainnet-beta" && publicEnv.allowMainnet && publicEnv.rpcMainnet) setNetworkState("mainnet-beta");
+    const stored = window.localStorage.getItem("veil-theme");
+    const next = stored === "light" || stored === "dark" ? stored : "dark";
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
   }, []);
 
-  const setNetwork = (next: Cluster) => {
-    if (next === "mainnet-beta" && (!publicEnv.allowMainnet || !publicEnv.rpcMainnet)) return;
-    setNetworkState(next);
-    window.localStorage.setItem("np-network", next);
+  const toggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    window.localStorage.setItem("veil-theme", next);
   };
 
   return (
-    <NetworkContext.Provider value={{ network, setNetwork, mainnetLocked: !publicEnv.allowMainnet || !publicEnv.rpcMainnet }}>
+    <ThemeContext.Provider value={{ theme, toggle }}>
       <ConnectionProvider endpoint={endpoint}>
         <WalletProvider wallets={wallets} autoConnect>
           {children}
         </WalletProvider>
       </ConnectionProvider>
-    </NetworkContext.Provider>
+    </ThemeContext.Provider>
   );
 }

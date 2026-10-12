@@ -1,135 +1,108 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
-import bs58 from "bs58";
 import nacl from "tweetnacl";
+import bs58 from "bs58";
+import { cookies } from "next/headers";
 import { prisma } from "./db";
 import { env } from "./env";
 import { HttpError } from "./http";
 
-const COOKIE = "np_session";
-const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
-const NONCE_MS = 10 * 60 * 1000;
+const COOKIE = "veil_session";
+const TEN_MINUTES = 10 * 60 * 1000;
+const SESSION_DAYS = 7;
 
-export function signInMessage(address: string, nonce: string, issued: string, expires: string) {
+function hash(value: string) {
+  return createHash("sha256").update(`${env.authSecret}:${value}`).digest("hex");
+}
+
+export function signInMessage(address: string, nonce: string, issued: Date) {
+  const expires = new Date(issued.getTime() + TEN_MINUTES);
   return [
-    "NEURALPAD sign-in",
-    "This signature only authenticates this browser session.",
-    "It does not authorize token creation, trades, or spending.",
-    `Address: ${address}`,
+    "VEIL wants you to sign in with your Solana account:",
+    address,
+    "",
+    "This signature does not approve a transaction or spend SOL.",
+    "",
     `Nonce: ${nonce}`,
-    `Issued: ${issued}`,
-    `Expires: ${expires}`,
+    `Issued At: ${issued.toISOString()}`,
+    `Expiration Time: ${expires.toISOString()}`,
   ].join("\n");
 }
 
-function hashToken(token: string) {
-  return createHash("sha256").update(`${env.authSecret}:${token}`).digest("hex");
-}
-
-export function sessionCookie(token: string) {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MS / 1000}${secure}`;
-}
-
-export function clearSessionCookie() {
-  return `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
-}
-
-export function readCookie(header: string | null, name = COOKIE) {
-  if (!header) return null;
-  for (const part of header.split(";")) {
-    const [key, ...rest] = part.trim().split("=");
-    if (key === name) return rest.join("=");
-  }
-  return null;
-}
-
 export async function issueNonce(address: string) {
-  let pubkey: PublicKey;
+  let wallet: PublicKey;
   try {
-    pubkey = new PublicKey(address);
+    wallet = new PublicKey(address);
   } catch {
-    throw new HttpError("Address is not a Solana public key", 400, "bad_address");
+    throw new HttpError("That is not a Solana address", 400, "bad_address");
   }
-  const canonical = pubkey.toBase58();
-  const nonce = randomBytes(16).toString("hex");
   const issued = new Date();
-  const expiresAt = new Date(issued.getTime() + NONCE_MS);
-  const message = signInMessage(canonical, nonce, issued.toISOString(), expiresAt.toISOString());
+  const nonce = randomBytes(16).toString("hex");
+  const message = signInMessage(wallet.toBase58(), nonce, issued);
   await prisma.authNonce.create({
-    data: { address: canonical, nonce, message, expiresAt },
+    data: {
+      walletAddress: wallet.toBase58(),
+      nonce,
+      message,
+      expiresAt: new Date(issued.getTime() + TEN_MINUTES),
+    },
   });
-  return { address: canonical, nonce, message, expiresAt: expiresAt.toISOString() };
-}
-
-export function verifyWalletSignature(message: string, signature: string, address: string) {
-  try {
-    const key = new PublicKey(address);
-    const sig = bs58.decode(signature);
-    return nacl.sign.detached.verify(new TextEncoder().encode(message), sig, key.toBytes());
-  } catch {
-    return false;
-  }
+  return { nonce, message };
 }
 
 export async function consumeNonce(address: string, nonce: string, signature: string) {
   const row = await prisma.authNonce.findUnique({ where: { nonce } });
-  if (!row || row.address !== address) {
-    throw new HttpError("Nonce is unknown", 401, "bad_nonce");
+  if (!row || row.walletAddress !== address) throw new HttpError("Unknown sign-in nonce", 400, "bad_nonce");
+  if (row.usedAt) throw new HttpError("This sign-in nonce was already used", 400, "nonce_used");
+  if (row.expiresAt.getTime() < Date.now()) throw new HttpError("This sign-in nonce expired", 400, "nonce_expired");
+  let ok = false;
+  try {
+    ok = nacl.sign.detached.verify(new TextEncoder().encode(row.message), bs58.decode(signature), new PublicKey(address).toBytes());
+  } catch {
+    ok = false;
   }
-  if (row.usedAt) {
-    throw new HttpError("Nonce was already used", 401, "replayed_nonce");
-  }
-  if (row.expiresAt.getTime() < Date.now()) {
-    throw new HttpError("Nonce expired", 401, "expired_nonce");
-  }
-  if (!verifyWalletSignature(row.message, signature, address)) {
-    throw new HttpError("Signature did not match the nonce message", 401, "bad_signature");
-  }
-  const marked = await prisma.authNonce.updateMany({
-    where: { id: row.id, usedAt: null },
-    data: { usedAt: new Date() },
-  });
-  if (marked.count !== 1) {
-    throw new HttpError("Nonce was already used", 401, "replayed_nonce");
-  }
+  if (!ok) throw new HttpError("Wallet signature did not match the sign-in message", 400, "bad_signature");
+  await prisma.authNonce.update({ where: { id: row.id }, data: { usedAt: new Date() } });
   const user = await prisma.user.upsert({
     where: { walletAddress: address },
     update: {},
     create: { walletAddress: address },
   });
   const token = randomBytes(32).toString("hex");
-  await prisma.session.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(token),
-      expiresAt: new Date(Date.now() + SESSION_MS),
-    },
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  await prisma.session.create({ data: { userId: user.id, tokenHash: hash(token), expiresAt } });
+  const jar = await cookies();
+  jar.set(COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: expiresAt,
   });
-  return { token, user };
+  return { walletAddress: user.walletAddress };
 }
 
-export async function sessionUser(cookieHeader: string | null) {
-  const token = readCookie(cookieHeader);
+export async function readSession() {
+  const jar = await cookies();
+  const token = jar.get(COOKIE)?.value;
   if (!token) return null;
-  const row = await prisma.session.findUnique({
-    where: { tokenHash: hashToken(token) },
+  const session = await prisma.session.findUnique({
+    where: { tokenHash: hash(token) },
     include: { user: true },
   });
-  if (!row || row.expiresAt.getTime() < Date.now()) return null;
-  return row.user;
+  if (!session || session.expiresAt.getTime() < Date.now()) return null;
+  return { walletAddress: session.user.walletAddress, userId: session.user.id };
 }
 
-export async function requireUser(cookieHeader: string | null) {
-  const user = await sessionUser(cookieHeader);
-  if (!user) throw new HttpError("Sign in with your wallet to continue", 401, "auth_required");
-  return user;
+export async function clearSession() {
+  const jar = await cookies();
+  const token = jar.get(COOKIE)?.value;
+  if (token) await prisma.session.deleteMany({ where: { tokenHash: hash(token) } });
+  jar.set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
-export function secretsMatch(provided: string, expected: string) {
-  if (!expected || !provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+export async function requireSession() {
+  const session = await readSession();
+  if (!session) throw new HttpError("Sign in with your wallet before continuing", 401, "auth_required");
+  return session;
 }
