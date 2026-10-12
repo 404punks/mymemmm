@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: neuralpad
+      POSTGRES_PASSWORD: neuralpad
+      POSTGRES_DB: neuralpad
+    ports:
+      - "5432:5432"
+    volumes:
+      - neuralpad-pg:/var/lib/postgresql/data
+
+volumes:
+  neuralpad-pg:
