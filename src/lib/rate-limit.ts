@@ -1,21 +1,14 @@
-type Bucket = { tokens: number; updated: number };
+import { HttpError } from "./http";
 
-const buckets = new Map<string, Bucket>();
+const buckets = new Map<string, { count: number; reset: number }>();
 
-export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; remaining: number } {
+export function assertRate(key: string, limit: number, windowMs = 60_000) {
   const now = Date.now();
   const current = buckets.get(key);
-  if (!current || now - current.updated >= windowMs) {
-    buckets.set(key, { tokens: limit - 1, updated: now });
-    return { ok: true, remaining: limit - 1 };
+  if (!current || current.reset < now) {
+    buckets.set(key, { count: 1, reset: now + windowMs });
+    return;
   }
-  if (current.tokens <= 0) {
-    return { ok: false, remaining: 0 };
-  }
-  current.tokens -= 1;
-  return { ok: true, remaining: current.tokens };
-}
-
-export function resetRateLimits() {
-  buckets.clear();
+  current.count += 1;
+  if (current.count > limit) throw new HttpError("Too many requests. Wait a minute and try again.", 429, "rate_limited");
 }

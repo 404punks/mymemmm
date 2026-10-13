@@ -3,307 +3,148 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-/// Wallet-authenticated account. Connection alone does not create a row.
 model User {
   id            String    @id @default(cuid())
   walletAddress String    @unique
-  displayName   String?
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
   sessions      Session[]
-  agents        Agent[]
-  notifications Notification[]
-  aiJobs        AiJob[]
 }
 
 model AuthNonce {
-  id        String    @id @default(cuid())
-  address   String
-  nonce     String    @unique
-  message   String
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  id            String    @id @default(cuid())
+  walletAddress String
+  nonce         String    @unique
+  message       String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
 
-  @@index([address, expiresAt])
+  @@index([walletAddress, expiresAt])
 }
 
 model Session {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
-model Agent {
+model Draft {
   id             String   @id @default(cuid())
-  handle         String   @unique
+  creatorWallet  String?
   name           String
+  symbol         String
   description    String
-  avatarSeed     String
-  category       String
-  personality    String
-  /// Pipe-delimited capability keys, e.g. |research|markets|
-  skills         String
-  providerId     String?
-  modelId        String?
-  systemPrompt   String
-  dailyLimit     Int      @default(40)
-  /// active | paused | unavailable
-  status         String   @default("paused")
-  /// Always "user-operated-assistant" unless an execution runtime is actually attached.
-  autonomy       String   @default("user-operated-assistant")
-  ownerId        String?
-  owner          User?    @relation(fields: [ownerId], references: [id])
-  published      Boolean  @default(false)
-  isDemo         Boolean  @default(false)
-  sourceUrl      String?
-  lastActiveAt   DateTime?
-  usageCount     Int      @default(0)
+  genre          String
+  twitter        String?
+  telegram       String?
+  website        String?
+  imageFileId    String?
+  characterJson  String
+  chaptersJson   String
+  tierJson       String
+  metadataUri    String?
+  imageCid       String?
+  status         String   @default("draft")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  activities     AgentActivity[]
-  tokens         Token[]
 
-  @@index([published, updatedAt])
-  @@index([category])
-  @@index([isDemo])
-}
-
-model AgentActivity {
-  id        String   @id @default(cuid())
-  agentId   String
-  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  kind      String
-  summary   String
-  /// model | job | api | chain
-  channel   String
-  status    String
-  createdAt DateTime @default(now())
-
-  @@index([agentId, createdAt])
-}
-
-model IndexRecord {
-  id                 String   @id @default(cuid())
-  sourceId           String   @unique
-  name               String
-  description        String
-  sourceUrl          String
-  sourceType         String
-  creator            String?
-  categories         String
-  capabilities       String
-  modelProvider      String?
-  repoUrl            String?
-  onchainAddress     String?
-  firstIndexedAt     DateTime @default(now())
-  lastCheckedAt      DateTime @default(now())
-  /// ok | stale | error | demo
-  status             String
-  provenance         String
-  /// verified | unverified | demo | user-submitted
-  verificationStatus String
-  isDemo             Boolean  @default(false)
-  searchText         String
-  contentHash        String?
-  reports            IndexReport[]
-
-  @@index([sourceType, lastCheckedAt])
-  @@index([modelProvider])
-  @@index([lastCheckedAt])
-  @@index([isDemo])
-  @@index([onchainAddress])
-}
-
-model IndexReport {
-  id        String      @id @default(cuid())
-  recordId  String
-  record    IndexRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  reason    String
-  details   String
-  reporter  String?
-  createdAt DateTime    @default(now())
-
-  @@index([recordId])
-}
-
-model IndexJob {
-  id           String    @id @default(cuid())
-  source       String
-  /// queued | running | completed | failed
-  status       String
-  cursor       String?
-  itemsAdded   Int       @default(0)
-  itemsUpdated Int       @default(0)
-  error        String?
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
-
-  @@index([source, startedAt])
-  @@index([status])
+  @@index([status, createdAt])
 }
 
 model Token {
-  id                  String    @id @default(cuid())
-  /// Mint address once confirmed, or a demo slug.
-  mintAddress         String    @unique
-  name                String
-  symbol              String
-  description         String
-  imageUrl            String?
-  bannerUrl           String?
-  metadataUri         String?
-  creatorAddress      String?
-  /// wallet | demo | unknown
-  creatorSource       String
-  /// devnet | mainnet-beta | demo
-  network             String
-  /// draft | pending | confirmed | failed | demo
-  status              String
-  signature           String?
-  bondingComplete     Boolean?
-  migrated            Boolean   @default(false)
-  agentId             String?
-  agent               Agent?    @relation(fields: [agentId], references: [id])
-  isDemo              Boolean   @default(false)
-  aiSummary           String?
-  aiSummaryAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  observations        PriceObservation[]
-  trades              TradeRecord[]
+  mint            String      @id
+  name            String
+  symbol          String
+  description     String
+  imageUrl        String
+  metadataUri     String
+  creatorWallet   String
+  curveCreator    String?
+  twitter         String?
+  telegram        String?
+  website         String?
+  genre           String
+  signature       String      @unique
+  devBuySol       Float       @default(0)
+  poolAtLaunch    String
+  graduated       Boolean     @default(false)
+  nextHolderGoal  Int?
+  createdAt       DateTime    @default(now())
+  character       Character?
+  chapters        Chapter[]
+  reports         Report[]
+  observations    PricePoint[]
 
-  @@index([status, createdAt])
-  @@index([creatorAddress])
-  @@index([isDemo])
+  @@index([createdAt])
+  @@index([creatorWallet])
 }
 
-model PriceObservation {
-  id           String   @id @default(cuid())
-  tokenId      String
-  token        Token    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
-  /// on-chain-quote | dexscreener
-  source       String
-  priceSol     String?
-  priceUsd     String?
-  marketCapUsd String?
-  volumeUsd    String?
-  liquidityUsd String?
-  note         String?
-  observedAt   DateTime @default(now())
-
-  @@index([tokenId, observedAt])
+model Character {
+  id          String @id @default(cuid())
+  mint        String @unique
+  name        String
+  epithet     String
+  premise     String
+  voice       String
+  appearance  String
+  token       Token  @relation(fields: [mint], references: [mint], onDelete: Cascade)
 }
 
-model TradeRecord {
-  id          String   @id @default(cuid())
-  tokenId     String
-  token       Token    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
-  signature   String   @unique
-  side        String
-  owner       String?
-  amountBase  String?
-  amountQuote String?
-  status      String
-  isDemo      Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  @@index([tokenId, createdAt])
-}
-
-model ActivityEvent {
+model Chapter {
   id         String   @id @default(cuid())
-  /// token_created | trade | agent_published | ai_analysis | index_update | job_failed | job_retry
-  kind       String
+  mint       String
+  index      Int
   title      String
-  summary    String
-  /// onchain | ai | system
-  sourceKind String
-  href       String?
-  signature  String?
-  address    String?
-  isDemo     Boolean  @default(false)
+  body       String
+  minTokens  String
+  origin     String
   createdAt  DateTime @default(now())
+  token      Token    @relation(fields: [mint], references: [mint], onDelete: Cascade)
 
-  @@index([createdAt])
-  @@index([kind, createdAt])
-  @@index([sourceKind])
+  @@unique([mint, index])
+  @@index([mint])
 }
 
-model AiJob {
-  id          String    @id @default(cuid())
-  kind        String
-  status      String
-  input       String
-  output      String?
-  provider    String?
-  model       String?
-  /// model | template | unavailable
-  outputSource String   @default("unavailable")
-  costUsd     String?
-  error       String?
-  userId      String?
-  user        User?     @relation(fields: [userId], references: [id])
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
-
-  @@index([kind, createdAt])
-  @@index([userId])
-}
-
-model UsageLedger {
-  id               String   @id @default(cuid())
-  provider         String
-  model            String
-  tokensIn         Int      @default(0)
-  tokensOut        Int      @default(0)
-  estimatedCostUsd String
-  agentId          String?
-  createdAt        DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([provider, createdAt])
-}
-
-model StoredFile {
+model Report {
   id        String   @id @default(cuid())
-  filename  String
-  mime      String
-  bytes     Int
+  mint      String
+  wallet    String?
+  reason    String
+  detail    String
   createdAt DateTime @default(now())
+  token     Token    @relation(fields: [mint], references: [mint], onDelete: Cascade)
+
+  @@index([mint, createdAt])
 }
 
-model MetadataDocument {
-  id          String   @id
-  payload     String
-  creatorHint String?
-  createdAt   DateTime @default(now())
-}
-
-model Notification {
+model PricePoint {
   id        String   @id @default(cuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  body      String
-  href      String?
-  read      Boolean  @default(false)
+  mint      String
+  priceUsd  String?
+  marketCapUsd String?
+  volumeUsd String?
+  source    String
+  observedAt DateTime @default(now())
+  token     Token    @relation(fields: [mint], references: [mint], onDelete: Cascade)
+
+  @@index([mint, observedAt])
+}
+
+model ChapterJob {
+  id        String   @id @default(cuid())
+  mint      String?
+  status    String
+  detail    String
   createdAt DateTime @default(now())
 
-  @@index([userId, createdAt])
-}
-
-model IndexCursor {
-  source    String   @id
-  cursor    String?
-  updatedAt DateTime @updatedAt
+  @@index([createdAt])
 }

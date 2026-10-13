@@ -1,13 +1,13 @@
-export const metadata = { title: "Risk disclosure" };
+export const metadata = { title: "Risk" };
 
 export default function RiskPage() {
   return (
-    <article className="max-w-2xl space-y-3 text-sm leading-6 text-paper-dim">
-      <h1 className="font-display text-3xl text-paper">Risk disclosure</h1>
-      <p>Meme tokens and bonding-curve tokens can lose substantial value or all of their value, quickly, and with no recovery. Liquidity can be thin. Metadata can be incomplete or misleading.</p>
-      <p>NEURALPAD does not provide investment, legal, or tax advice. It does not audit tokens, programs, or wallets. It does not guarantee execution, pricing, or safety.</p>
-      <p>On-chain data can be delayed or unavailable when an RPC fails. Cached observations are labeled with their source and time. Missing holder or market data is left missing.</p>
-      <p>Transactions cost network fees. A simulated transaction can still fail. You should read the wallet prompt before signing. Devnet tokens have no mainnet value.</p>
-    </article>
+    <div className="page">
+      <h1 style={{ fontFamily: "var(--font-display), serif", fontSize: 48 }}>Risk disclosure</h1>
+      <p>Tokens launched here are volatile. You can lose some or all of the SOL you spend. A chapter, a character, or a holder goal is not a reason a coin will rise, and VEIL does not promise profit, liquidity, or a listing.</p>
+      <p>Nothing on this site is financial, legal, or tax advice. You sign every transaction yourself. A failed, expired, or rejected transaction is not a launch.</p>
+      <p>On-chain data can be delayed or missing. When a price, holder count, or curve is unavailable, VEIL leaves the field empty rather than inventing it.</p>
+      <p>Mainnet transactions are irreversible. Read the wallet preview before you approve it.</p>
+    </div>
   );
 }

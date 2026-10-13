@@ -1,22 +1,16 @@
-export function Logo({ compact = false }: { compact?: boolean }) {
-  if (compact) {
-    return (
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
-        <rect width="32" height="32" rx="8" fill="#10151f" />
-        <path d="M8 23V9h3.2L16 16.2 20.8 9H24v14h-2.8v-8.8L16.8 20.6h-1.6L10.8 14.2V23H8Z" fill="#E7EDF4" />
-        <circle cx="8" cy="9" r="1.4" fill="#3EE0FF" />
-        <circle cx="24" cy="9" r="1.4" fill="#8D7CFF" />
-        <circle cx="16" cy="23.2" r="1.5" fill="#3EE0FF" />
-      </svg>
-    );
-  }
+export function Logo({ size = 32 }: { size?: number }) {
   return (
-    <span className="flex items-center gap-2.5">
-      <Logo compact />
-      <span>
-        <span className="block font-display text-[15px] tracking-[0.16em]">NEURALPAD</span>
-        <span className="block text-[11px] text-paper-faint">Intelligence layer</span>
-      </span>
-    </span>
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <linearGradient id="veil-ring" x1="8" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#F2B84B" />
+          <stop offset="1" stopColor="#FF7A93" />
+        </linearGradient>
+      </defs>
+      <circle cx="32" cy="32" r="28" fill="none" stroke="url(#veil-ring)" strokeWidth="2.4" />
+      <path d="M14 32c6.2-8 12.4-12 18-12s11.8 4 18 12c-6.2 8-12.4 12-18 12s-11.8-4-18-12Z" fill="none" stroke="#F4EFE6" strokeWidth="1.6" />
+      <circle cx="32" cy="32" r="5.5" fill="#8F8BF5" />
+      <circle cx="34" cy="30" r="1.6" fill="#F4EFE6" />
+    </svg>
   );
 }

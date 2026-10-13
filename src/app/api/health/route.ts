@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
-import { listModels } from "@/lib/ai/providers";
+import { env, rpcProblem } from "@/lib/env";
 import { json } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -8,22 +7,20 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   let database = "ok";
   try {
-    await prisma.user.count();
-  } catch {
-    database = "unavailable";
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    database = error instanceof Error ? error.message : "unavailable";
   }
-  const models = listModels();
   return json({
-    service: "neuralpad",
+    service: "veil",
+    cluster: "mainnet-beta",
     database,
-    aiConfigured: models.some((model) => model.configured),
-    models: models.map((model) => ({ provider: model.provider, model: model.model, configured: model.configured })),
-    solana: {
-      defaultNetwork: env.defaultNetwork,
-      devnetRpc: Boolean(env.solanaRpcUrl),
-      mainnetEnabled: env.allowMainnet,
-      mainnetRpc: Boolean(env.solanaRpcUrlMainnet),
-    },
+    aiConfigured: Boolean(env.anthropicKey),
+    ipfsConfigured: Boolean(env.pinataJwt),
+    rpcConfigured: !rpcProblem(),
+    portalDataConfigured: Boolean(env.pumpPortalKey),
+    holderSource: env.birdeyeKey ? "birdeye" : "largest-accounts-only",
+    veilFeeSol: 0,
     generatedAt: new Date().toISOString(),
   });
 }

@@ -2,65 +2,56 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
 import { Logo } from "./logo";
-import { useNetwork } from "./providers";
-import { publicEnv } from "@/lib/client-env";
-import { shortAddress, formatWhen } from "@/lib/format";
+import { useTheme } from "./providers";
 
-const NAV = [
-  { href: "/", label: "Discover" },
-  { href: "/agents", label: "AI Agents" },
-  { href: "/intelligence", label: "Intelligence Index" },
-  { href: "/launch", label: "Launch Token" },
-  { href: "/activity", label: "Live Activity" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/docs", label: "Documentation" },
+const LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/explore", label: "Explore" },
+  { href: "/launch", label: "Launch" },
+  { href: "/how-it-works", label: "How it works" },
+  { href: "/profile", label: "Profile" },
 ];
 
-type SearchHit = {
-  agents: { handle: string; name: string; isDemo: boolean }[];
-  tokens: { mintAddress: string; name: string; symbol: string; isDemo: boolean }[];
-  records: { id: string; name: string; sourceType: string; isDemo: boolean }[];
-};
+function short(value: string) {
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<SearchHit | null>(null);
-  const [notes, setNotes] = useState<{ id: string; title: string; body: string; href: string | null; createdAt: string }[]>([]);
-  const [session, setSession] = useState<{ authenticated: boolean; walletAddress?: string }>({ authenticated: false });
-  const [authError, setAuthError] = useState("");
-  const { network, setNetwork, mainnetLocked } = useNetwork();
   const wallet = useWallet();
+  const { theme, toggle } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const walletRef = useRef<HTMLDivElement>(null);
+  const [session, setSession] = useState<string | null>(null);
+  const [authError, setAuthError] = useState("");
 
+  useEffect(() => { setOpen(false); setWalletOpen(false); }, [pathname]);
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
+    if (!walletOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setWalletOpen(false);
+    }
+    function onPointer(event: PointerEvent) {
+      if (!walletRef.current?.contains(event.target as Node)) setWalletOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [walletOpen]);
   useEffect(() => {
-    void fetch("/api/auth/session").then(async (res) => setSession(await res.json()));
-    void fetch("/api/notifications").then(async (res) => {
+    void fetch("/api/auth/session").then(async (res) => {
       const data = await res.json();
-      setNotes(data.items ?? []);
-    });
+      setSession(data.walletAddress ?? null);
+    }).catch(() => setSession(null));
   }, [wallet.publicKey]);
-
-  useEffect(() => {
-    if (!searchOpen || query.trim().length < 2) return;
-    const handle = setTimeout(() => {
-      void fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
-        .then((res) => res.json())
-        .then(setHits)
-        .catch(() => setHits(null));
-    }, 180);
-    return () => clearTimeout(handle);
-  }, [query, searchOpen]);
 
   async function signIn() {
     setAuthError("");
@@ -69,233 +60,98 @@ export function Shell({ children }: { children: React.ReactNode }) {
       return;
     }
     const address = wallet.publicKey.toBase58();
-    const nonceRes = await fetch("/api/auth/nonce", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address }),
-    });
+    const nonceRes = await fetch("/api/auth/nonce", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address }) });
     const nonce = await nonceRes.json();
-    if (!nonceRes.ok) {
-      setAuthError(nonce.error || "Could not issue a nonce");
-      return;
-    }
+    if (!nonceRes.ok) { setAuthError(nonce.error || "Could not issue a nonce"); return; }
     const signature = await wallet.signMessage(new TextEncoder().encode(nonce.message));
     const verify = await fetch("/api/auth/verify", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ address, nonce: nonce.nonce, signature: bs58.encode(signature) }),
     });
     const data = await verify.json();
-    if (!verify.ok) {
-      setAuthError(data.error || "Sign-in failed");
-      return;
-    }
-    setSession({ authenticated: true, walletAddress: address });
+    if (!verify.ok) { setAuthError(data.error || "Sign-in failed"); return; }
+    setSession(address);
   }
 
   async function signOut() {
     await fetch("/api/auth/session", { method: "DELETE" });
-    setSession({ authenticated: false });
+    setSession(null);
   }
 
   const nav = (
-    <nav className="flex flex-1 flex-col gap-1" aria-label="Primary">
-      {NAV.map((item) => {
-        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-        return (
-          <Link key={item.href} href={item.href} data-active={active} className="nav-link">
-            <span className="font-mono text-[10px] text-cyan">{item.label.slice(0, 2).toUpperCase()}</span>
-            {item.label}
-          </Link>
-        );
-      })}
+    <nav className="nav" aria-label="Primary">
+      {LINKS.map((link) => (
+        <Link key={link.href} href={link.href} data-active={pathname === link.href}>{link.label}</Link>
+      ))}
     </nav>
   );
 
   return (
-    <div className="app-shell">
-      <a href="#content" className="skip-link">Skip to content</a>
-      {open ? <button className="drawer-backdrop fixed inset-0 z-30 bg-black/50" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
-      <aside className="sidebar" data-open={open}>
-        <Link href="/" aria-label="NEURALPAD home"><Logo /></Link>
+    <div>
+      <a className="skip-link" href="#content">Skip to content</a>
+      <header className="topbar">
+        <button className="icon-btn mobile-only" aria-label="Open menu" onClick={() => setOpen(true)}>Menu</button>
+        <Link href="/" className="brand" aria-label="VEIL home"><Logo /><span className="word">VEIL</span></Link>
         {nav}
-        <div className="panel p-3 text-xs text-paper-dim">
-          <div className="mb-2 flex items-center justify-between">
-            <span>Network</span>
-            <span className={network === "devnet" ? "badge badge-cyan" : "badge badge-warn"}>{network}</span>
-          </div>
-          <label className="block">
-            <span className="sr-only">Select network</span>
-            <select className="select" value={network} onChange={(event) => setNetwork(event.target.value as "devnet" | "mainnet-beta")}>
-              <option value="devnet">Devnet</option>
-              <option value="mainnet-beta" disabled={mainnetLocked}>Mainnet {mainnetLocked ? "(locked)" : ""}</option>
-            </select>
-          </label>
-        </div>
-      </aside>
-      <div className="min-w-0">
-        <header className="topbar">
-          <button className="icon-btn mobile-only" aria-label="Open menu" onClick={() => setOpen(true)}>
-            <MenuIcon />
-          </button>
-          <button className="btn btn-ghost hidden min-w-[220px] justify-start text-paper-dim sm:inline-flex" onClick={() => setSearchOpen(true)}>
-            Search agents, tokens, index
-          </button>
-          <div className="ml-auto flex items-center gap-2">
-            <button className="icon-btn sm:hidden" aria-label="Search" onClick={() => setSearchOpen(true)}>
-              <SearchIcon />
+        <div className="ml-auto flex items-center gap-2" style={{ marginLeft: "auto" }}>
+          <span className="kicker" title="VEIL only builds mainnet transactions">Mainnet</span>
+          <button className="icon-btn" aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"} onClick={toggle}>{theme === "dark" ? "Light" : "Dark"}</button>
+          <div className="relative" ref={walletRef}>
+            <button className="btn btn-gold" aria-expanded={walletOpen} aria-haspopup="menu" onClick={() => setWalletOpen((value) => !value)}>
+              {wallet.publicKey ? short(wallet.publicKey.toBase58()) : "Connect wallet"}
             </button>
-            <div className="relative">
-              <button className="icon-btn" aria-label="Notifications" aria-expanded={notesOpen} onClick={() => setNotesOpen((value) => !value)}>
-                <BellIcon />
-              </button>
-              {notesOpen ? (
-                <div className="menu panel">
-                  <p className="px-2 py-1 text-xs uppercase tracking-wide text-paper-faint">Notifications</p>
-                  {notes.length === 0 ? <p className="px-2 py-3 text-sm text-paper-dim">No notifications yet.</p> : null}
-                  {notes.map((note) => (
-                    <Link key={note.id} href={note.href || "/activity"} className="block rounded-lg px-2 py-2 hover:bg-white/5" onClick={() => setNotesOpen(false)}>
-                      <span className="block text-sm">{note.title}</span>
-                      <span className="block text-xs text-paper-faint">{note.body} · {formatWhen(note.createdAt)}</span>
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <WalletControl
-              connected={wallet.connected}
-              connecting={wallet.connecting}
-              address={wallet.publicKey?.toBase58()}
-              authenticated={session.authenticated && session.walletAddress === wallet.publicKey?.toBase58()}
-              authError={authError}
-              onConnect={(name) => {
-                const match = wallet.wallets.find((item) => item.adapter.name === name);
-                if (!match) return;
-                wallet.select(match.adapter.name);
-                void match.adapter.connect().catch(() => undefined);
-              }}
-              onDisconnect={() => void wallet.disconnect()}
-              onSignIn={() => void signIn()}
-              onSignOut={() => void signOut()}
-            />
-          </div>
-        </header>
-        <main id="content" className="main-pad">{children}</main>
-        <Footer />
-      </div>
-      {searchOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-start bg-black/60 px-4 pt-[12vh]" role="dialog" aria-modal aria-label="Search">
-          <div className="panel w-full max-w-xl p-4">
-            <div className="flex gap-2">
-              <input autoFocus className="field" placeholder="Search the index" value={query} onChange={(event) => setQuery(event.target.value)} />
-              <button className="btn btn-ghost" onClick={() => setSearchOpen(false)}>Close</button>
-            </div>
-            <div className="mt-3 space-y-2 text-sm">
-              {hits?.agents.map((agent) => (
-                <Link key={agent.handle} href={`/agents/${agent.handle}`} onClick={() => setSearchOpen(false)} className="block rounded-lg px-2 py-1 hover:bg-white/5">
-                  Agent · {agent.name} {agent.isDemo ? "· sample" : ""}
-                </Link>
-              ))}
-              {hits?.tokens.map((token) => (
-                <Link key={token.mintAddress} href={`/token/${token.mintAddress}`} onClick={() => setSearchOpen(false)} className="block rounded-lg px-2 py-1 hover:bg-white/5">
-                  Token · {token.name} ({token.symbol}) {token.isDemo ? "· sample" : ""}
-                </Link>
-              ))}
-              {hits?.records.map((record) => (
-                <Link key={record.id} href={`/intelligence/${record.id}`} onClick={() => setSearchOpen(false)} className="block rounded-lg px-2 py-1 hover:bg-white/5">
-                  Index · {record.name} {record.isDemo ? "· sample" : ""}
-                </Link>
-              ))}
-              {query.length >= 2 && hits && hits.agents.length + hits.tokens.length + hits.records.length === 0 ? (
-                <p className="text-paper-dim">No matches in the local database.</p>
-              ) : null}
-            </div>
+            {walletOpen ? (
+              <div className="menu panel" role="menu">
+                <button className="btn" onClick={() => setWalletOpen(false)}>Close</button>
+                {!wallet.connected ? (
+                  <div className="grid gap-2">
+                    {(["Phantom", "Solflare", "Backpack"] as const).map((name) => (
+                      <button key={name} className="btn" onClick={() => {
+                        const match = wallet.wallets.find((item) => item.adapter.name === name);
+                        if (!match) return;
+                        wallet.select(match.adapter.name);
+                        void match.adapter.connect().catch(() => undefined);
+                      }}>{name}</button>
+                    ))}
+                    <p className="muted" style={{ fontSize: 12 }}>Connecting does not sign you in and never shares a seed phrase.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-2 text-sm">
+                    <p className="muted" style={{ fontSize: 12 }}>{session === wallet.publicKey?.toBase58() ? "Signed in" : "Connected, not signed in"}</p>
+                    {session === wallet.publicKey?.toBase58() ? <button className="btn" onClick={() => void signOut()}>Sign out</button> : <button className="btn" onClick={() => void signIn()}>Sign in with wallet</button>}
+                    <button className="btn" onClick={() => void wallet.disconnect()}>Disconnect</button>
+                    {authError ? <p className="rose" role="alert">{authError}</p> : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
-      ) : null}
-    </div>
-  );
-}
-
-function WalletControl(props: {
-  connected: boolean;
-  connecting: boolean;
-  address?: string;
-  authenticated: boolean;
-  authError: string;
-  onConnect: (name: "Phantom" | "Solflare") => void;
-  onDisconnect: () => void;
-  onSignIn: () => void;
-  onSignOut: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button className="btn btn-primary shrink-0" onClick={() => setOpen((value) => !value)}>
-        {props.connecting ? "Connecting" : props.address ? shortAddress(props.address) : (
-          <>
-            <span className="sm:hidden">Wallet</span>
-            <span className="hidden sm:inline">Connect wallet</span>
-          </>
-        )}
-      </button>
+      </header>
       {open ? (
-        <div className="menu panel w-72">
-          {!props.connected ? (
-            <div className="grid gap-2">
-              <button className="btn btn-ghost" onClick={() => props.onConnect("Phantom")}>Phantom</button>
-              <button className="btn btn-ghost" onClick={() => props.onConnect("Solflare")}>Solflare</button>
-              <p className="px-1 text-xs text-paper-faint">Connecting a wallet does not sign you in and never shares a seed phrase.</p>
-            </div>
-          ) : (
-            <div className="grid gap-2 text-sm">
-              <p className="font-mono text-xs">{props.address}</p>
-              <p className="text-paper-dim">{props.authenticated ? "Session active" : "Wallet connected, not signed in"}</p>
-              {props.authenticated ? (
-                <button className="btn btn-ghost" onClick={props.onSignOut}>Sign out</button>
-              ) : (
-                <button className="btn btn-ghost" onClick={props.onSignIn}>Sign in with wallet</button>
-              )}
-              <Link href="/portfolio" className="btn btn-ghost" onClick={() => setOpen(false)}>Portfolio</Link>
-              <button className="btn btn-quiet" onClick={props.onDisconnect}>Disconnect</button>
-              {props.authError ? <p className="text-xs text-danger">{props.authError}</p> : null}
-            </div>
-          )}
+        <div className="panel" style={{ position: "fixed", inset: "68px 12px auto 12px", zIndex: 40, padding: 12 }}>
+          <nav className="grid gap-1" aria-label="Mobile">
+            {LINKS.map((link) => <Link key={link.href} href={link.href} className="btn" style={{ justifyContent: "flex-start" }}>{link.label}</Link>)}
+            <button className="btn" onClick={() => setOpen(false)}>Close</button>
+          </nav>
         </div>
       ) : null}
+      <main id="content">{children}</main>
+      <footer className="page" style={{ paddingTop: 0 }}>
+        <div className="footer-grid muted" style={{ fontSize: 14 }}>
+          <div>
+            <div className="brand"><Logo size={28} /><span className="word" style={{ fontSize: 18 }}>VEIL</span></div>
+            <p>Coins launched here are pump.fun coins on Solana mainnet. They can go to zero.</p>
+          </div>
+          <div className="grid gap-1">
+            <Link href="/how-it-works">How it works</Link>
+            <Link href="/legal/terms">Terms</Link>
+            <Link href="/legal/risk">Risk disclosure</Link>
+          </div>
+          <p>Status is reported by /api/health. VEIL does not custody wallets and does not add a platform fee.</p>
+        </div>
+      </footer>
     </div>
   );
-}
-
-function Footer() {
-  return (
-    <footer className="mx-auto grid max-w-page gap-4 px-5 pb-10 text-sm text-paper-dim md:grid-cols-[1.4fr_1fr_1fr]">
-      <div>
-        <Logo />
-        <p className="mt-3 max-w-sm">The intelligence layer for tokens. Public index, assistant profiles, and Pump program launches you sign yourself.</p>
-        <p className="mt-2 text-xs text-paper-faint">Project status is reported from /api/health. Meme tokens can lose all of their value.</p>
-      </div>
-      <div className="grid gap-1">
-        <Link href="/docs">Documentation</Link>
-        <Link href="/legal/terms">Terms</Link>
-        <Link href="/legal/privacy">Privacy</Link>
-        <Link href="/legal/risk">Risk disclosure</Link>
-      </div>
-      <div className="grid gap-1">
-        <Link href="/studio">Token idea studio</Link>
-        {publicEnv.socialX ? <a href={publicEnv.socialX}>X / Twitter</a> : <span>X link not configured</span>}
-        {publicEnv.socialGithub ? <a href={publicEnv.socialGithub}>GitHub</a> : <span>GitHub link not configured</span>}
-      </div>
-    </footer>
-  );
-}
-
-function MenuIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 4h12M2 8h12M2 12h12" /></svg>;
-}
-function SearchIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="7" cy="7" r="4" /><path d="M10 10l3.5 3.5" /></svg>;
-}
-function BellIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8 2.5a3.5 3.5 0 0 0-3.5 3.5v2.2L3 10.5h10l-1.5-2.3V6A3.5 3.5 0 0 0 8 2.5Z" /><path d="M6.5 12a1.5 1.5 0 0 0 3 0" /></svg>;
 }

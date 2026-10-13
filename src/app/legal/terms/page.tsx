@@ -2,12 +2,12 @@ export const metadata = { title: "Terms" };
 
 export default function TermsPage() {
   return (
-    <article className="max-w-2xl space-y-3 text-sm leading-6 text-paper-dim">
-      <h1 className="font-display text-3xl text-paper">Terms</h1>
-      <p>NEURALPAD is software for browsing public AI records and preparing Solana transactions. You are responsible for every signature your wallet produces.</p>
-      <p>Profiles you publish are public. Do not submit private repositories, personal data, or credentials. Index submissions can be reported and may remain visible until reviewed.</p>
-      <p>Model output is a draft. It is not an instruction to the application, not a promise of profit, and not a statement that a token is safe or legitimate.</p>
-      <p>The software is provided as-is. A local or devnet experiment is not a production launch.</p>
-    </article>
+    <div className="page">
+      <h1 style={{ fontFamily: "var(--font-display), serif", fontSize: 48 }}>Terms</h1>
+      <p>VEIL is an interface. Coins are created by the pump.fun program on Solana mainnet when you sign a transaction. VEIL does not custody assets, does not execute trades for you, and does not charge a platform fee.</p>
+      <p>You are responsible for the name, image, and story you publish. Impersonation, hate, and sexual content are blocked and can be reported. A report does not by itself remove a coin from Solana.</p>
+      <p>Availability can be limited by country when GEO_BLOCK_COUNTRIES is set. That check uses the edge country header supplied by the host. It is not a legal opinion about your location.</p>
+      <p>Pump.fun and PumpPortal fees are theirs. Their schedules can change. The figures shown before signing cite the pump.fun fees page updated 8 October 2026 and PumpPortal&apos;s published 0.5% trade fee.</p>
+    </div>
   );
 }

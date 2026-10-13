@@ -1,11 +1,12 @@
 import { issueNonce } from "@/lib/auth";
-import { assertRate } from "@/lib/api";
-import { errorResponse, json } from "@/lib/http";
+import { assertSameOrigin, clientIp, errorResponse, json } from "@/lib/http";
+import { assertRate } from "@/lib/rate-limit";
 import { nonceSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
-    assertRate(request, "nonce", 10);
+    assertSameOrigin(request);
+    assertRate(`nonce:${clientIp(request)}`, 20);
     const body = nonceSchema.parse(await request.json());
     return json(await issueNonce(body.address));
   } catch (error) {

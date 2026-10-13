@@ -1,11 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="none">
-  <rect width="1200" height="480" fill="#07090f"/>
-  <g stroke="#3ee0ff" stroke-opacity="0.35" stroke-width="1.4">
-    <path d="M80 300C220 120 360 360 560 190s340-80 560 40"/>
-    <path d="M40 180C240 40 420 300 640 150s360 90 500-20"/>
-  </g>
-  <circle cx="220" cy="170" r="7" fill="#3ee0ff"/>
-  <circle cx="560" cy="190" r="9" fill="#8d7cff"/>
-  <circle cx="900" cy="160" r="6" fill="#e7edf4"/>
-  <text x="72" y="420" fill="#e7edf4" font-family="ui-sans-serif, system-ui" font-size="42">NEURALPAD</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600" fill="none">
+  <rect width="1600" height="600" fill="#0C1022"/>
+  <circle cx="1180" cy="280" r="280" fill="#8F8BF5" fill-opacity="0.16"/>
+  <circle cx="1240" cy="220" r="180" fill="#F2B84B" fill-opacity="0.12"/>
+  <circle cx="1100" cy="360" r="140" fill="#FF7A93" fill-opacity="0.1"/>
+  <circle cx="980" cy="300" r="150" stroke="#F2B84B" stroke-width="3" fill="none"/>
+  <path d="M860 300c42-62 88-92 140-92s98 30 140 92c-42 62-88 92-140 92s-98-30-140-92Z" stroke="#F4EFE6" stroke-width="3"/>
+  <circle cx="1000" cy="300" r="28" fill="#8F8BF5"/>
+  <circle cx="1012" cy="288" r="8" fill="#F4EFE6"/>
+  <text x="80" y="250" fill="#F4EFE6" font-family="Georgia, serif" font-size="72">Hold the coin.</text>
+  <text x="80" y="330" fill="#F4EFE6" font-family="Georgia, serif" font-size="72">Read the character.</text>
+  <text x="84" y="390" fill="#9AA3C7" font-family="Arial, sans-serif" font-size="22">VEIL · mainnet mystery launchpad</text>
 </svg>

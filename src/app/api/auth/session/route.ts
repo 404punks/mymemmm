@@ -1,16 +1,22 @@
-import { clearSessionCookie, sessionUser } from "@/lib/auth";
-import { json } from "@/lib/http";
+import { clearSession, readSession } from "@/lib/auth";
+import { errorResponse, json } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const user = await sessionUser(request.headers.get("cookie"));
-  if (!user) return json({ authenticated: false });
-  return json({ authenticated: true, walletAddress: user.walletAddress, displayName: user.displayName });
+export async function GET() {
+  try {
+    const session = await readSession();
+    return json({ authenticated: Boolean(session), walletAddress: session?.walletAddress ?? null });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 export async function DELETE() {
-  const response = json({ authenticated: false });
-  response.headers.set("Set-Cookie", clearSessionCookie());
-  return response;
+  try {
+    await clearSession();
+    return json({ authenticated: false });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }

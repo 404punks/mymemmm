@@ -7,14 +7,14 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     testTimeout: 30000,
     env: {
-      DATABASE_URL: "file:./test.db",
       AUTH_SECRET: "test-secret",
+      PUBLIC_APP_URL: "http://localhost:3000",
+      DATABASE_URL: "postgresql://veil:veil@localhost:5432/veil?schema=public",
     },
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "server-only": path.resolve(__dirname, "./tests/stubs/server-only.ts"),
     },
   },
 });

@@ -1,33 +1,58 @@
-# NEURALPAD
+# VEIL
 
-The intelligence layer for tokens.
+VEIL launches pump.fun coins on Solana mainnet from this site. Each coin has an original character and four chapters. Later chapters stay on the server until the signed-in wallet's real token balance crosses a tier. Selling drops the balance, and the next read seals those chapters again.
 
-NEURALPAD indexes public AI systems, keeps assistant profiles distinct from autonomous agents, and prepares Solana token launches through the official Pump program. You connect a wallet and sign every transaction yourself.
+The browser creates the mint key and the wallet signs. The server never sees a seed or a private key. A coin is saved only after the create transaction is confirmed and the mint account exists.
 
-## What is real
+## What you need before a real launch
 
-- **Database.** Agents, index rows, metadata, sessions, AI jobs, and activity live in SQLite by default (PostgreSQL is supported by changing the Prisma provider).
-- **Pump transactions.** `create_v2`, bonding-curve v3 trades, and PumpSwap quotes are built with `@pump-fun/pump-sdk` 4.0.0 and `@pump-fun/pump-swap-sdk`. The mint keypair is created in the browser. The server never receives a secret key and never signs.
-- **A launch is confirmed only after** the transaction is found at confirmed commitment and both the mint and bonding-curve accounts exist.
-- **Market numbers** come from the bonding-curve account, the Pump SDK quote helpers, Dexscreener, or `getTokenLargestAccounts`. If a source fails, the field stays empty.
-- **AI calls** run on the server through an allowlist. Without `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, model routes say they are unavailable. The idea studio can still show an editable offline template, labeled as a template.
-- **Index jobs** call the public Hugging Face API, the public GitHub search API, and the configured MCP registry. Failures are stored on the job. Sample seed rows are marked `demo` and are excluded from verified homepage counts.
+These are not optional for a mainnet launch. The buttons call the live services and show the provider error when a key is missing. They do not invent a character, a price, or a transaction.
+
+| Variable | Used for |
+| --- | --- |
+| `DATABASE_URL` | Postgres for characters, chapters, launches, and sessions |
+| `AUTH_SECRET` | Session cookie hash |
+| `SOLANA_RPC_URL` | Paid mainnet RPC (Helius or QuickNode). Production refuses `api.mainnet-beta.solana.com` |
+| `ANTHROPIC_API_KEY` | Character and chapter writing |
+| `PINATA_JWT` | Image and metadata JSON on IPFS. pump.fun no longer accepts `https://pump.fun/api/ipfs` |
+| `PUBLIC_APP_URL` | Story link written into the coin description |
+| `NEXT_PUBLIC_APP_URL` | Same origin, so the wallet adapter can use `/api/rpc` without exposing the RPC key |
+| `PUMPPORTAL_API_KEY` | Server-side PumpPortal data websocket. `subscribeTokenTrade` is metered |
+| `BIRDEYE_API_KEY` | Holder counts for the "most holders" sort and later chapters |
+| `CRON_SECRET` | `POST /api/cron/chapters` |
+| `GEO_BLOCK_COUNTRIES` | Optional comma-separated ISO codes, read from `x-vercel-ip-country` or `cf-ipcountry` |
+
+S3-compatible art copies are optional (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL`, `S3_REGION`). Pinata is still required for the mint metadata URI.
+
+## Fees shown before signing
+
+Checked on 12 October 2026.
+
+- VEIL platform fee: 0.
+- pump.fun create fee: 0 platform fee. You still pay the Solana network fee and the rent deposit inside the transaction. Source: [pump.fun fees](https://pump.fun/docs/fees), updated 8 October 2026. That page does not publish a flat 0.011 SOL rent number, so VEIL does not display one. The wallet preview is the debit.
+- Bonding-curve trades: 1.25% total (0.300% creator + 0.95% protocol), taken inside the trade.
+- Graduation to PumpSwap: 0.015 SOL, only if a later trade migrates the coin.
+- PumpPortal: 0.5% on trades it builds, including a dev buy. No extra create fee. Source: [PumpPortal creation](https://pumpportal.fun/creation) and their trading docs.
+- Priority fee: whatever you type. The default `0.00005` SOL is a starting value, not a required charge.
+
+Create transactions are built with `POST https://pumpportal.fun/api/trade-local`, `action: "create"`, `pool: "pump"`, `denominatedInSol: "true"`, and `tokenMetadata: { name, symbol, uri }`. The mint field is the public key. The browser signs that key first, then the wallet signs. If PumpPortal rejects a non-zero dev buy on create, VEIL builds a zero-buy create and then a separate buy for you to sign.
+
+Buys and sells use the same local endpoint. Bonding-curve coins use `pool: "pump"`. Graduated coins use `pool: "pump-amm"`.
 
 ## Local setup
 
 ```bash
 cp .env.example .env
+# fill the keys above
+docker compose up -d postgres
 npm install
 npx prisma db push
-npm run db:seed
 npm run dev
 ```
 
 Open http://localhost:3000.
 
-SQLite paths in `DATABASE_URL` are resolved from `prisma/schema.prisma`. `file:./dev.db` is `prisma/dev.db`.
-
-Checks:
+There is no seed. The explore page stays empty until a create transaction confirms.
 
 ```bash
 npm run typecheck
@@ -36,56 +61,32 @@ npm run lint
 npm run build
 ```
 
-Index one public source:
+## Deploy on Vercel
+
+1. Create a Postgres database (Neon or Supabase) and set `DATABASE_URL`.
+2. Set every required variable in the project settings. Do not prefix secrets with `NEXT_PUBLIC_`.
+3. Set `NEXT_PUBLIC_APP_URL` and `PUBLIC_APP_URL` to the production origin.
+4. `npx prisma db push` against that database before the first launch.
+5. Deploy. `vercel.json` calls `POST /api/cron/chapters` hourly. Vercel sends `Authorization: Bearer $CRON_SECRET`.
+6. Confirm `/api/health` reports the database, RPC, Anthropic, and Pinata as configured.
+
+## Mainnet checklist
+
+- RPC is a paid mainnet endpoint, not the public Solana RPC.
+- You are signing with a wallet you control. VEIL cannot sign for you.
+- The cost panel is visible and the wallet preview matches it.
+- Dev buy is an amount you are willing to spend. It can go to zero.
+- Metadata URI loads in a browser before you sign.
+- You have not set `VEIL_E2E_SEND`. This repository's test suite refuses to broadcast.
+
+A funded end-to-end send was not run in development. `tests/e2e.mainnet.test.ts` only deserializes a PumpPortal trade-local response when you set `VEIL_E2E_MINT` to a real bonding-curve mint, and it throws if `VEIL_E2E_SEND` or `VEIL_E2E_CONFIRM` is set.
 
 ```bash
-npm run index:run -- huggingface
+VEIL_E2E_MINT="<bonding-curve mint>" npm run test:e2e
 ```
 
-`ALLOW_INDEX_TRIGGER=true` also enables the buttons on `/intelligence` without an admin key. Set `ADMIN_API_KEY` and turn that flag off before sharing a deployment.
+## Holder chapters
 
-## Production
+Default reading tiers for the four launch chapters are 0, 100,000, 500,000, and 1,000,000 tokens (6 decimals). Chapter text for a locked tier is omitted from the response. The coin page and the character dossier do not print it.
 
-```bash
-npm run build
-npm start
-```
-
-Set at least:
-
-- `DATABASE_URL`
-- `AUTH_SECRET` (long random string)
-- `PUBLIC_APP_URL` (metadata URIs must be 200 characters or fewer, and must be reachable if Pump’s indexer should fetch them)
-- `SOLANA_RPC_URL` (devnet) or `SOLANA_RPC_URL_MAINNET` with `ALLOW_MAINNET=true` and `NEXT_PUBLIC_ALLOW_MAINNET=true`
-
-PostgreSQL:
-
-```bash
-docker compose up -d postgres
-```
-
-Then set `provider = "postgresql"` in `prisma/schema.prisma`, point `DATABASE_URL` at the database, and run `npx prisma db push`.
-
-Mainnet transaction building stays off unless both the server flag and the public flag are set. This repository does not send a mainnet transaction during development.
-
-## Wallets
-
-Phantom and Solflare through the Solana wallet adapter. Connecting a wallet does not create a session. Publishing an agent requires a separate sign-in message with a 10-minute nonce that can be used once. That signature does not approve a transfer.
-
-## Feature status
-
-| Area | State |
-| --- | --- |
-| Discover, agents, index, launch, activity, portfolio, docs | Implemented |
-| Wallet connect and signature sessions | Implemented |
-| Pump `create_v2` and user-signed submit | Implemented, devnet by default |
-| Bonding-curve and migrated-pool trade builders | Implemented when RPC can read the accounts |
-| AI providers, limits, cost ledger | Implemented; idle without keys |
-| Hugging Face, GitHub, MCP indexing | Implemented; depends on those APIs |
-| Holder census beyond largest RPC accounts | Not available |
-| Autonomous agent execution | Not implemented |
-| Seed-phrase custody | Not implemented |
-
-## Risk
-
-Meme tokens can lose all of their value. Read `/legal/risk` before signing anything. Model text is not an audit and not a price forecast.
+Later chapters are written only when Birdeye returns a holder count at or above `CHAPTER_HOLDER_GOAL` (default 100), then `CHAPTER_HOLDER_STEP` (default 150) higher for each following chapter. If the holder count is missing, the job records a skip and writes nothing.

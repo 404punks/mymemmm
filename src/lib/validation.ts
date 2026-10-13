@@ -1,142 +1,82 @@
 import { z } from "zod";
-import { CATEGORIES, SKILLS, SOURCE_TYPES } from "./constants";
 
-export const clusterSchema = z.enum(["devnet", "mainnet-beta"]);
+const social = z.string().trim().max(200).optional().or(z.literal(""));
 
-export const agentInputSchema = z.object({
-  name: z.string().trim().min(2).max(48),
-  handle: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9-]{3,24}$/, "Use 3–24 lowercase letters, numbers, or hyphens"),
-  description: z.string().trim().min(12).max(600),
-  category: z.enum(CATEGORIES),
-  personality: z.string().trim().min(2).max(160),
-  skills: z.array(z.enum(SKILLS)).min(1).max(SKILLS.length),
-  providerId: z.string().trim().max(40).optional().nullable(),
-  modelId: z.string().trim().max(80).optional().nullable(),
-  systemPrompt: z.string().trim().min(10).max(4000),
-  dailyLimit: z.coerce.number().int().min(1).max(500),
-  publish: z.boolean().default(false),
-  avatarSeed: z.string().trim().max(48).optional(),
-  tokenMint: z.string().trim().max(64).optional().nullable(),
-});
+const tierList = z.array(z.string().regex(/^\d+(\.\d{1,6})?$/)).length(4).refine((tiers) => {
+  const values = tiers.map(Number);
+  return values.every((value, index) => index === 0 || value >= values[index - 1]);
+}, "Each chapter tier must be at least as high as the one before it");
 
-export const indexQuerySchema = z.object({
-  q: z.string().trim().max(120).optional().default(""),
-  category: z.string().trim().max(40).optional().default(""),
-  source: z.enum(["", ...SOURCE_TYPES]).optional().default(""),
-  provider: z.string().trim().max(60).optional().default(""),
-  capability: z.string().trim().max(40).optional().default(""),
-  hasToken: z.enum(["", "yes", "no"]).optional().default(""),
-  cursor: z.string().trim().max(200).optional().default(""),
-  limit: z.coerce.number().int().min(1).max(30).optional().default(12),
-});
-
-export const reportSchema = z.object({
-  reason: z.enum(["incorrect", "duplicate", "private-data", "spam", "other"]),
-  details: z.string().trim().min(8).max(500),
-  reporter: z.string().trim().max(80).optional(),
-});
-
-export const submitIndexSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  description: z.string().trim().min(12).max(600),
-  sourceUrl: z.string().trim().url().max(300),
-  sourceType: z.enum(["user-agent", "github", "mcp", "huggingface-model", "huggingface-space"]),
-  creator: z.string().trim().max(80).optional(),
-  categories: z.array(z.enum(CATEGORIES)).min(1).max(4),
-  capabilities: z.array(z.enum(SKILLS)).max(SKILLS.length).default([]),
-  modelProvider: z.string().trim().max(60).optional(),
-  repoUrl: z.string().trim().url().max(300).optional().or(z.literal("")),
-  onchainAddress: z.string().trim().max(64).optional(),
-});
-
-export const ideaSchema = z.object({
-  concept: z.string().trim().min(8).max(800),
-  tone: z.string().trim().max(80).optional().default(""),
-});
-
-export const analyzeSchema = z.object({
-  mint: z.string().trim().min(3).max(64),
-  network: clusterSchema.default("devnet"),
-});
-
-export const researchSchema = z.object({
-  query: z.string().trim().min(3).max(200),
-  agentHandle: z.string().trim().max(24).optional(),
-});
-
-export const brandSchema = z.object({
-  name: z.string().trim().min(2).max(32),
-  symbol: z.string().trim().min(1).max(13),
-  concept: z.string().trim().min(4).max(400),
-});
-
-export const metadataSchema = z.object({
+export const draftSchema = z.object({
   name: z.string().trim().min(1).max(32),
-  symbol: z
-    .string()
-    .trim()
-    .min(1)
-    .max(13)
-    .regex(/^[A-Za-z0-9]+$/, "Symbol uses letters and numbers only"),
+  symbol: z.string().trim().min(1).max(13).regex(/^[A-Za-z0-9]+$/, "Ticker uses letters and numbers only"),
   description: z.string().trim().min(1).max(400),
-  imageFileId: z.string().trim().min(4).max(40).optional().nullable(),
-  bannerFileId: z.string().trim().min(4).max(40).optional().nullable(),
+  genre: z.string().trim().min(2).max(40),
+  twitter: social,
+  telegram: social,
   website: z.string().trim().url().max(200).optional().or(z.literal("")),
-  twitter: z.string().trim().max(80).optional().or(z.literal("")),
-  telegram: z.string().trim().max(80).optional().or(z.literal("")),
+  tiers: tierList.optional(),
+  draftId: z.string().trim().min(8).max(40).optional(),
+});
+
+export const chapterEditSchema = z.object({
+  draftId: z.string().trim().min(8).max(40),
+  tiers: tierList.optional(),
+  character: z.object({
+    name: z.string().trim().min(1).max(80),
+    epithet: z.string().trim().min(1).max(120),
+    premise: z.string().trim().min(1).max(600),
+    voice: z.string().trim().min(1).max(300),
+    appearance: z.string().trim().min(1).max(400),
+  }),
+  chapters: z.array(z.object({
+    title: z.string().trim().min(1).max(80),
+    body: z.string().trim().min(1).max(2500),
+  })).length(4),
 });
 
 export const buildCreateSchema = z.object({
-  network: clusterSchema,
+  draftId: z.string().trim().min(8).max(40),
+  publicKey: z.string().trim().min(32).max(44),
   mint: z.string().trim().min(32).max(44),
-  name: z.string().trim().min(1).max(32),
-  symbol: z.string().trim().min(1).max(13),
-  uri: z.string().trim().min(8).max(200),
-  creator: z.string().trim().min(32).max(44),
-  user: z.string().trim().min(32).max(44),
-  mayhemMode: z.boolean().default(false),
-  holderReward: z.boolean().default(false),
+  devBuySol: z.number().min(0).max(100),
+  slippage: z.number().min(0).max(50),
+  priorityFee: z.number().min(0).max(0.1),
 });
 
-export const quoteSchema = z.object({
-  network: clusterSchema,
+export const buildTradeSchema = z.object({
+  publicKey: z.string().trim().min(32).max(44),
   mint: z.string().trim().min(32).max(44),
-  user: z.string().trim().min(32).max(44).optional(),
-  side: z.enum(["buy", "sell"]),
-  amount: z.string().trim().regex(/^\d+(\.\d+)?$/),
-  slippage: z.coerce.number().min(0.1).max(50),
+  action: z.enum(["buy", "sell"]),
+  amount: z.union([z.number().positive().max(1_000_000_000), z.string().regex(/^\d{1,3}%$/)]),
+  denominatedInSol: z.boolean(),
+  slippage: z.number().min(0).max(50),
+  priorityFee: z.number().min(0).max(0.1),
 });
 
-export const buildTradeSchema = quoteSchema.extend({
-  user: z.string().trim().min(32).max(44),
+export const sendSchema = z.object({
+  transaction: z.string().trim().min(20).max(20000),
 });
 
 export const confirmSchema = z.object({
-  network: clusterSchema,
+  draftId: z.string().trim().min(8).max(40),
   mint: z.string().trim().min(32).max(44),
-  signature: z.string().trim().min(32).max(100),
-  name: z.string().trim().min(1).max(32),
-  symbol: z.string().trim().min(1).max(13),
-  description: z.string().trim().max(400).default(""),
-  metadataUri: z.string().trim().max(200).optional(),
-  imageUrl: z.string().trim().max(300).optional(),
-  agentHandle: z.string().trim().max(24).optional(),
+  signature: z.string().trim().min(64).max(128),
+  creator: z.string().trim().min(32).max(44),
+  devBuySol: z.number().min(0).max(100),
+});
+
+export const reportSchema = z.object({
+  mint: z.string().trim().min(32).max(44),
+  reason: z.enum(["impersonation", "hate", "sexual", "scam", "other"]),
+  detail: z.string().trim().min(4).max(500),
 });
 
 export const nonceSchema = z.object({
   address: z.string().trim().min(32).max(44),
 });
 
-export const verifySchema = z.object({
-  address: z.string().trim().min(32).max(44),
-  nonce: z.string().trim().min(8).max(80),
-  signature: z.string().trim().min(32).max(200),
-});
-
-export const previewSchema = z.object({
-  prompt: z.string().trim().min(2).max(500),
+export const verifySchema = nonceSchema.extend({
+  nonce: z.string().trim().min(16).max(80),
+  signature: z.string().trim().min(64).max(200),
 });
